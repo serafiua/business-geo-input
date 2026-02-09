@@ -6,7 +6,7 @@ import os
 import time
 
 # Konfigurasi halaman utama
-st.set_page_config(page_title="Input Data Usaha", layout="centered")
+st.set_page_config(page_title="Input Data Lokasi Usaha", layout="centered")
 
 def get_address_details(lat, lon):
     """Fungsi pengambilan detail alamat melalui Nominatim API"""
@@ -33,7 +33,7 @@ if 'kecamatan' not in st.session_state: st.session_state.kecamatan = ""
 st.title("Form Input Data Lokasi Usaha")
 
 # Input identitas usaha
-nama_usaha = st.text_input("Nama Usaha", placeholder="Contoh: Burjo (ARI)")
+nama_usaha = st.text_input("Nama Usaha")
 
 # Pengambilan data lokasi secara pasif
 js_key = f"get_loc_{int(time.time() / 10)}"
@@ -50,7 +50,9 @@ if st.button("Ambil Koordinat & Alamat Secara Otomatis"):
             st.session_state.kecamatan = kecamatan
         st.success("Lokasi berhasil diambil.")
     else:
-        st.warning("Menunggu respon GPS... Klik sekali lagi jika data tidak muncul.")
+        # Menggunakan placeholder agar pesan tidak langsung hilang saat script re-run
+        warning_placeholder = st.empty()
+        warning_placeholder.error("GPS belum merespon. Silakan tunggu 2-3 detik, pastikan izin lokasi aktif, lalu klik tombol kembali.")
 
 # Input field yang dapat disesuaikan manual
 jalan_input = st.text_input("Nama Jalan", value=st.session_state.jalan)
