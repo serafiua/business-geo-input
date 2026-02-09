@@ -30,19 +30,16 @@ if 'lon' not in st.session_state: st.session_state.lon = 0.0
 if 'jalan' not in st.session_state: st.session_state.jalan = ""
 if 'kecamatan' not in st.session_state: st.session_state.kecamatan = ""
 
-st.title("📍 Form Input Data Usaha")
+st.title("Form Input Data Lokasi Usaha")
 
-# Input Nama Usaha
+# Input identitas usaha
 nama_usaha = st.text_input("Nama Usaha", placeholder="Contoh: Burjo (ARI)")
 
-st.subheader("Detail Lokasi")
-
-# Tombol GPS menggunakan key unik untuk menghindari cache browser
-# Kita taruh di atas agar eksekusi JS menjadi prioritas pertama
-js_key = f"get_loc_{int(time.time() / 10)}" # Key berubah setiap 10 detik agar stabil
+# Pengambilan data lokasi secara pasif
+js_key = f"get_loc_{int(time.time() / 10)}"
 loc_data = get_geolocation(component_key=js_key)
 
-if st.button("🌐 Ambil Koordinat & Alamat"):
+if st.button("Ambil Koordinat & Alamat Secara Otomatis"):
     if loc_data:
         st.session_state.lat = loc_data['coords']['latitude']
         st.session_state.lon = loc_data['coords']['longitude']
@@ -51,11 +48,11 @@ if st.button("🌐 Ambil Koordinat & Alamat"):
             jalan, kecamatan = get_address_details(st.session_state.lat, st.session_state.lon)
             st.session_state.jalan = jalan
             st.session_state.kecamatan = kecamatan
-        st.success("Lokasi berhasil ditarik!")
+        st.success("Lokasi berhasil diambil.")
     else:
-        st.warning("Menunggu respon GPS... Pastikan izin lokasi aktif dan klik tombol sekali lagi jika tidak muncul.")
+        st.warning("Menunggu respon GPS... Klik sekali lagi jika data tidak muncul.")
 
-# Input Field yang bisa diedit manual
+# Input field yang dapat disesuaikan manual
 jalan_input = st.text_input("Nama Jalan", value=st.session_state.jalan)
 kecamatan_input = st.text_input("Kecamatan", value=st.session_state.kecamatan)
 
@@ -65,7 +62,7 @@ with col1:
 with col2:
     st.number_input("Longitude", value=st.session_state.lon, format="%.15f", disabled=True)
 
-# Simpan Data
+# Eksekusi penyimpanan data
 if st.button("Simpan Data"):
     if nama_usaha and st.session_state.lat != 0.0:
         data_baru = {
@@ -83,31 +80,44 @@ if st.button("Simpan Data"):
         else:
             df_baru.to_csv(file_name, mode='a', index=False, header=False)
             
-        st.balloons()
-        st.success("Data berhasil disimpan ke tabel.")
+        st.success("Data berhasil disimpan.")
         
-        # Reset state setelah simpan agar form bersih untuk input berikutnya
+        # Pembersihan state input
         st.session_state.lat = 0.0
         st.session_state.lon = 0.0
         st.session_state.jalan = ""
         st.session_state.kecamatan = ""
     else:
-        st.warning("Lengkapi Nama Usaha dan klik Ambil Koordinat dulu.")
+        st.warning("Lengkapi data usaha dan koordinat.")
 
-# Preview Tabel CSV
+# Visualisasi dan manajemen data tersimpan
 st.divider()
-st.subheader("📊 Preview Data")
-if os.path.exists("data_usaha.csv"):
-    df_preview = pd.read_csv("data_usaha.csv")
+st.subheader("Preview Data")
+file_path = "data_usaha.csv"
+
+if os.path.exists(file_path):
+    df_preview = pd.read_csv(file_path)
     st.dataframe(df_preview, use_container_width=True)
     
-    # Tombol Download
-    csv_bytes = df_preview.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download Data CSV",
-        data=csv_bytes,
-        file_name="data_usaha.csv",
-        mime="text/csv",
-    )
+    col_dl, col_del = st.columns([1, 1])
+    
+    with col_dl:
+        # Fitur unduh file CSV
+        csv_bytes = df_preview.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Data CSV",
+            data=csv_bytes,
+            file_name="data_usaha.csv",
+            mime="text/csv",
+        )
+    
+    with col_del:
+        # Fitur penghapusan data permanen
+        confirm_delete = st.checkbox("Konfirmasi Hapus Semua Data")
+        if st.button("Hapus Semua Data", type="primary", disabled=not confirm_delete):
+            os.remove(file_path)
+            st.warning("Semua data telah dihapus permanen.")
+            time.sleep(1)
+            st.rerun()
 else:
-    st.info("Belum ada data.")
+    st.info("Belum ada data yang tersimpan di server.")
