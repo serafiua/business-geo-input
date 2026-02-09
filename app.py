@@ -12,7 +12,7 @@ def get_address_details(lat, lon):
     """Fungsi pengambilan detail alamat melalui Nominatim API"""
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
-        headers = {'User-Agent': 'GeoBizApp-Survey/1.4'}
+        headers = {'User-Agent': 'GeoBizApp-Survey/1.6'}
         response = requests.get(url, headers=headers, timeout=10)
         data = response.json()
         address = data.get('address', {})
@@ -24,31 +24,28 @@ def get_address_details(lat, lon):
     except Exception:
         return "", ""
 
-# Inisialisasi session state agar data tidak hilang saat interaksi UI
-if 'lat' not in st.session_state:
-    st.session_state.lat = 0.0
-if 'lon' not in st.session_state:
-    st.session_state.lon = 0.0
-if 'jalan' not in st.session_state:
-    st.session_state.jalan = ""
-if 'kecamatan' not in st.session_state:
-    st.session_state.kecamatan = ""
+# Inisialisasi session state untuk menjaga persistensi data
+if 'lat' not in st.session_state: st.session_state.lat = 0.0
+if 'lon' not in st.session_state: st.session_state.lon = 0.0
+if 'jalan' not in st.session_state: st.session_state.jalan = ""
+if 'kecamatan' not in st.session_state: st.session_state.kecamatan = ""
 
 st.title("📍 Form Input Data Usaha")
 
-# Input Nama Usaha (di luar form agar tidak ter-reset saat ambil GPS)
+# Input Nama Usaha
 nama_usaha = st.text_input("Nama Usaha", placeholder="Contoh: Burjo (ARI)")
 
 st.subheader("Detail Lokasi")
 
-# Tombol GPS diletakkan di luar form agar eksekusi JavaScript tidak terhambat
+# Tombol GPS menggunakan key unik untuk menghindari cache browser
+# Kita taruh di atas agar eksekusi JS menjadi prioritas pertama
+js_key = f"get_loc_{int(time.time() / 10)}" # Key berubah setiap 10 detik agar stabil
+loc_data = get_geolocation(component_key=js_key)
+
 if st.button("🌐 Ambil Koordinat & Alamat"):
-    js_key = f"get_loc_{int(time.time())}"
-    location = get_geolocation(component_key=js_key)
-    
-    if location:
-        st.session_state.lat = location['coords']['latitude']
-        st.session_state.lon = location['coords']['longitude']
+    if loc_data:
+        st.session_state.lat = loc_data['coords']['latitude']
+        st.session_state.lon = loc_data['coords']['longitude']
         
         with st.spinner("Mengidentifikasi lokasi..."):
             jalan, kecamatan = get_address_details(st.session_state.lat, st.session_state.lon)
@@ -56,11 +53,11 @@ if st.button("🌐 Ambil Koordinat & Alamat"):
             st.session_state.kecamatan = kecamatan
         st.success("Lokasi berhasil ditarik!")
     else:
-        st.error("GPS tidak merespon. Pastikan izin lokasi aktif.")
+        st.warning("Menunggu respon GPS... Pastikan izin lokasi aktif dan klik tombol sekali lagi jika tidak muncul.")
 
-# Menggunakan kolom input yang terikat langsung ke session state
-jalan_input = st.text_input("Nama Jalan", value=st.session_state.jalan, key="jalan_widget")
-kecamatan_input = st.text_input("Kecamatan", value=st.session_state.kecamatan, key="kec_widget")
+# Input Field yang bisa diedit manual
+jalan_input = st.text_input("Nama Jalan", value=st.session_state.jalan)
+kecamatan_input = st.text_input("Kecamatan", value=st.session_state.kecamatan)
 
 col1, col2 = st.columns(2)
 with col1:
@@ -68,51 +65,49 @@ with col1:
 with col2:
     st.number_input("Longitude", value=st.session_state.lon, format="%.15f", disabled=True)
 
-# Logika penyimpanan data
-if st.button("Simpan ke CSV"):
-    # Validasi data sebelum simpan
+# Simpan Data
+if st.button("Simpan Data"):
     if nama_usaha and st.session_state.lat != 0.0:
         data_baru = {
             "Nama Usaha": [nama_usaha],
-            "Nama Jalan": [jalan_input], # Mengambil inputan terbaru dari widget
-            "Kecamatan": [kecamatan_input], # Mengambil inputan terbaru dari widget
+            "Nama Jalan": [jalan_input],
+            "Kecamatan": [kecamatan_input],
             "Latitude": [st.session_state.lat],
             "Longitude": [st.session_state.lon]
         }
         df_baru = pd.DataFrame(data_baru)
         
         file_name = "data_usaha.csv"
-        # Penulisan data ke CSV (Append Mode)
         if not os.path.isfile(file_name):
             df_baru.to_csv(file_name, index=False)
         else:
             df_baru.to_csv(file_name, mode='a', index=False, header=False)
             
         st.balloons()
-        st.success(f"Data '{nama_usaha}' berhasil ditambahkan.")
+        st.success("Data berhasil disimpan ke tabel.")
         
-        # Reset input setelah simpan (opsional, agar siap input data berikutnya)
+        # Reset state setelah simpan agar form bersih untuk input berikutnya
         st.session_state.lat = 0.0
         st.session_state.lon = 0.0
         st.session_state.jalan = ""
         st.session_state.kecamatan = ""
     else:
-        st.warning("Lengkapi Nama Usaha dan ambil koordinat terlebih dahulu.")
+        st.warning("Lengkapi Nama Usaha dan klik Ambil Koordinat dulu.")
 
 # Preview Tabel CSV
 st.divider()
-st.subheader("📊 Preview Data Terkumpul")
+st.subheader("📊 Preview Data")
 if os.path.exists("data_usaha.csv"):
     df_preview = pd.read_csv("data_usaha.csv")
     st.dataframe(df_preview, use_container_width=True)
     
-    # Tombol Download untuk mendapatkan file CSV utuh
-    csv_data = df_preview.to_csv(index=False).encode('utf-8')
+    # Tombol Download
+    csv_bytes = df_preview.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Download Data CSV",
-        data=csv_data,
-        file_name="data_usaha_total.csv",
+        data=csv_bytes,
+        file_name="data_usaha.csv",
         mime="text/csv",
     )
 else:
-    st.info("Belum ada data yang tersimpan.")
+    st.info("Belum ada data.")
